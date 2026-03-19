@@ -1,12 +1,339 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  GUEST
+  STUDENT
+  CONTRIBUTOR
+  MENTOR
+  ADMIN
+  OWNER
+}
+
+enum ResourceType {
+  NOTES
+  PYQ
+  SYLLABUS
+}
+
+enum Department {
+  COMPUTER
+  PHYSICS
+  CHEMISTRY
+  MATHEMATICS
+  ELECTRONICS
+  BOTANY
+  ZOOLOGY
+  BIOLOGY
+  ENGLISH
+}
+
+enum UploadStatus {
+  PENDING
+  UNDER_REVIEW
+  REJECTED
+  APPEALED
+  APPROVED
+}
+
+enum ModerationDecision {
+  APPROVED
+  REJECTED
+}
+
+enum ChatSessionStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum SenderType {
+  CONTRIBUTOR
+  ADMIN
+}
+
+enum RoleRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ==================== MODELS ====================
+
+model User {
+  id               String   @id @default(uuid())
+  email            String   @unique
+  passwordHash     String   @map("password_hash")
+  name             String?
+  bio              String?
+  semester         Int?
+  department       Department?
+  collegeId        String?  @map("collegeId")
+  profilePicture   String?  @map("profile_picture")
+  roles            UserRole[] @default([STUDENT])
+  warningCount     Int      @default(0) @map("warning_count")
+  canUpload        Boolean  @default(true) @map("can_upload")
+  isActive         Boolean  @default(true) @map("is_active")
+  emailVerified    Boolean  @default(false) @map("email_verified")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  college              College?           @relation(fields: [collegeId], references: [id])
+  pendingUploads       PendingUpload[]    @relation("UploadedBy")
+  assignedUploads      PendingUpload[]    @relation("AssignedAdmin")
+  resources            Resource[]         @relation("ResourceUploader")
+  approvedResources    Resource[]         @relation("ResourceApprover")
+  bookmarks            Bookmark[]
+  ratings              ResourceRating[]
+  downloads            DownloadHistory[]
+  roleRequests         RoleRequest[]      @relation("Requester")
+  reviewedRequests     RoleRequest[]      @relation("Reviewer")
+  warnings             UserWarning[]      @relation("WarnedUser")
+  issuedWarnings       UserWarning[]      @relation("WarningIssuer")
+  moderationLogs       ModerationLog[]
+  chatSessionsAsUser   ChatSession[]      @relation("UserInChat")
+  chatSessionsAsAdmin  ChatSession[]      @relation("AdminInChat")
+  chatMessages         ChatMessage[]
+
+  @@map("users")
+}
+
+model College {
+  id        String   @id @default(uuid())
+  name      String
+  city      String
+  state     String
+  logo      String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  users User[]
+
+  @@map("colleges")
+  @@index([name])
+}
+
+model PendingUpload {
+  id              String        @id @default(uuid())
+  title           String
+  description     String
+  subject         String
+  semester        Int
+  department      Department
+  resourceType    ResourceType  @map("resource_type")
+  chapterTopic    String?       @map("chapter_topic")
+  blobUrl         String        @map("blob_url")
+  fileSize        Int           @map("file_size")
+  fileHash        String        @map("file_hash")
+  uploadedById    String        @map("uploaded_by_id")
+  assignedAdminId String?       @map("assigned_admin_id")
+  status          UploadStatus  @default(PENDING)
+  canEdit         Boolean       @default(true) @map("can_edit")
+  rejectionReason String?       @map("rejection_reason")
+  chatSessionId   String?       @unique @map("chat_session_id")
+  appealCount     Int           @default(0) @map("appeal_count")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  lastActivityAt  DateTime      @default(now()) @map("last_activity_at")
+
+  // Relations
+  uploadedBy     User          @relation("UploadedBy", fields: [uploadedById], references: [id])
+  assignedAdmin  User?         @relation("AssignedAdmin", fields: [assignedAdminId], references: [id])
+  chatSession    ChatSession?  @relation("PendingUploadChat")
+  moderationLogs ModerationLog[]
+
+  @@index([uploadedById])
+  @@index([assignedAdminId])
+  @@index([status])
+  @@index([fileHash])
+  @@map("pending_uploads")
+}
+
+model Resource {
+  id            String       @id @default(uuid())
+  title         String
+  description   String
+  subject       String
+  semester      Int
+  department    Department
+  resourceType  ResourceType @map("resource_type")
+  chapterTopic  String?      @map("chapter_topic")
+  fileUrl       String       @map("file_url")
+  fileSize      Int          @map("file_size")
+  fileHash      String       @map("file_hash")
+  thumbnailUrl  String?      @map("thumbnail_url")
+  uploadedById  String       @map("uploaded_by_id")
+  approvedById  String       @map("approved_by_id")
+  approvedAt    DateTime     @map("approved_at")
+  downloadCount Int          @default(0) @map("download_count")
+  viewCount     Int          @default(0) @map("view_count")
+  averageRating Float?       @map("average_rating")
+  totalRatings  Int          @default(0) @map("total_ratings")
+  isPremium     Boolean      @default(false) @map("is_premium")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  uploadedBy       User              @relation("ResourceUploader", fields: [uploadedById], references: [id])
+  approvedBy       User              @relation("ResourceApprover", fields: [approvedById], references: [id])
+  bookmarks        Bookmark[]
+  ratings          ResourceRating[]
+  downloads        DownloadHistory[]
+  moderationLogs   ModerationLog[]
+
+  @@index([uploadedById])
+  @@index([semester])
+  @@index([department])
+  @@index([resourceType])
+  @@index([fileHash])
+  @@map("resources")
+  @@index([semester, department, resourceType])
+}
+
+model ModerationLog {
+  id               String             @id @default(uuid())
+  originalUploadId String             @map("original_upload_id")
+  resourceId       String?            @map("resource_id")
+  decision         ModerationDecision
+  reason           String?
+  decidedById      String             @map("decided_by_id")
+  decidedAt        DateTime           @default(now()) @map("decided_at")
+  metadataSnapshot Json               @map("metadata_snapshot")
+
+  // Relations
+  pendingUpload PendingUpload @relation(fields: [originalUploadId], references: [id])
+  resource      Resource?     @relation(fields: [resourceId], references: [id])
+  decidedBy     User          @relation(fields: [decidedById], references: [id])
+
+  @@index([originalUploadId])
+  @@index([decidedById])
+  @@map("moderation_log")
+}
+
+model ChatSession {
+  id              String            @id @default(uuid())
+  pendingUploadId String            @unique @map("pending_upload_id")
+  userId          String            @map("user_id")
+  adminId         String            @map("admin_id")
+  status          ChatSessionStatus @default(ACTIVE)
+  createdAt       DateTime          @default(now()) @map("created_at")
+  closedAt        DateTime?         @map("closed_at")
+
+  // Relations
+  pendingUpload PendingUpload  @relation("PendingUploadChat", fields: [pendingUploadId], references: [id])
+  user          User           @relation("UserInChat", fields: [userId], references: [id])
+  admin         User           @relation("AdminInChat", fields: [adminId], references: [id])
+  messages      ChatMessage[]
+
+  @@index([userId])
+  @@index([adminId])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id            String     @id @default(uuid())
+  chatSessionId String     @map("chat_session_id")
+  senderId      String     @map("sender_id")
+  senderType    SenderType @map("sender_type")
+  messageText   String     @map("message_text")
+  timestamp     DateTime   @default(now())
+  isRead        Boolean    @default(false) @map("is_read")
+
+  // Relations
+  chatSession ChatSession @relation(fields: [chatSessionId], references: [id])
+  sender      User        @relation(fields: [senderId], references: [id])
+
+  @@index([chatSessionId])
+  @@index([senderId])
+  @@map("chat_messages")
+}
+
+model Bookmark {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  resourceId String   @map("resource_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user     User     @relation(fields: [userId], references: [id])
+  resource Resource @relation(fields: [resourceId], references: [id])
+
+  @@unique([userId, resourceId])
+  @@index([userId])
+  @@map("bookmarks")
+}
+
+model ResourceRating {
+  id         String   @id @default(uuid())
+  resourceId String   @map("resource_id")
+  userId     String   @map("user_id")
+  rating     Int
+  reviewText String?  @map("review_text")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  resource Resource @relation(fields: [resourceId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([resourceId, userId])
+  @@index([resourceId])
+  @@map("resource_ratings")
+}
+
+model DownloadHistory {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  resourceId   String   @map("resource_id")
+  downloadedAt DateTime @default(now()) @map("downloaded_at")
+
+  // Relations
+  user     User     @relation(fields: [userId], references: [id])
+  resource Resource @relation(fields: [resourceId], references: [id])
+
+  @@index([userId])
+  @@index([resourceId])
+  @@map("download_history")
+}
+
+model RoleRequest {
+  id               String            @id @default(uuid())
+  userId           String            @map("user_id")
+  requestedRole    UserRole          @map("requested_role")
+  status           RoleRequestStatus @default(PENDING)
+  requestedAt      DateTime          @default(now()) @map("requested_at")
+  reviewedById     String?           @map("reviewed_by_id")
+  reviewedAt       DateTime?         @map("reviewed_at")
+  rejectionReason  String?           @map("rejection_reason")
+
+  // Relations
+  user       User  @relation("Requester", fields: [userId], references: [id])
+  reviewedBy User? @relation("Reviewer", fields: [reviewedById], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("role_requests")
+}
+
+model UserWarning {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  warnedById String  @map("warned_by_id")
+  reason    String
+  warnedAt  DateTime @default(now()) @map("warned_at")
+
+  // Relations
+  user     User @relation("WarnedUser", fields: [userId], references: [id])
+  warnedBy User @relation("WarningIssuer", fields: [warnedById], references: [id])
+
+  @@index([userId])
+  @@map("user_warnings")
 }

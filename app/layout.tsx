@@ -1,34 +1,21 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+// app/layout.tsx
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
+import { SessionProvider } from "next-auth/react";
+import { Crimson_Text, Inter } from "next/font/google";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const crimson = Crimson_Text({
   subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-crimson",
+  display: "swap",
 });
-
-export const metadata: Metadata = {
-  title: {
-    default: "VidyaVerse",
-    template: "%s | VidyaVerse",
-  },
-  description:
-    "VidyaVerse is a modern platform for students to discover notes, solve doubts, and connect with mentors — all in one unified knowledge ecosystem.",
-  keywords: [
-    "VidyaVerse",
-    "college resources",
-    "student platform",
-    "notes sharing",
-    "mentorship",
-    "doubt solving",
-  ],
-  authors: [{ name: "VidyaVerse Team" }],
-};
 
 export default function RootLayout({
   children,
@@ -36,12 +23,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-[var(--color-background)] text-[var(--color-foreground)]">
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${crimson.variable} ${inter.variable} antialiased`}>
+        <SessionProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+          </ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   );

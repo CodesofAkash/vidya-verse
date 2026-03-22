@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
 }
 
 // ==================== ENUMS ====================
@@ -81,6 +81,8 @@ model User {
   canUpload        Boolean  @default(true) @map("can_upload")
   isActive         Boolean  @default(true) @map("is_active")
   emailVerified    Boolean  @default(false) @map("email_verified")
+  emailVerificationToken String?         @unique
+  emailVerificationExpiry DateTime?
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 

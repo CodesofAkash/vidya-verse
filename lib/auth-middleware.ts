@@ -1,54 +1,75 @@
-import { NextRequest } from 'next/server';
-import { verifyAccessToken, isTokenBlacklisted, isUserBlacklisted } from './jwt';
-import { UserRole } from '@prisma/client';
+// Force Node.js runtime — auth() uses bcrypt/crypto internally
+export const runtime = 'nodejs';
 
-export async function authenticateRequest(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization');
-  const token = authHeader?.replace('Bearer ', '');
+import { auth } from '@/auth';
 
-  if (!token) {
-    return null;
-  }
-
-  // Check blacklist
-  const blacklisted = await isTokenBlacklisted(token);
-  if (blacklisted) {
-    return null;
-  }
-
-  // Verify token
-  const decoded = verifyAccessToken(token);
-  if (!decoded) {
-    return null;
-  }
-
-  // Check user blacklist
-  const userBlacklisted = await isUserBlacklisted(decoded.userId);
-  if (userBlacklisted) {
-    return null;
-  }
-
-  return decoded;
+export interface AuthUser {
+  userId: string;
+  email: string;
+  name: string | null;
+  roles: string[];
+  emailVerified: boolean;
 }
 
-export async function requireAuth(request: NextRequest) {
-  const user = await authenticateRequest(request);
-  
-  if (!user) {
+/**
+ * Require a valid session. Throws 'Unauthorized' if none.
+ */
+export async function requireAuth(): Promise<AuthUser> {
+  const session = await auth();
+
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
 
+  return {
+    userId: session.user.id,
+    email: session.user.email ?? '',
+    name: session.user.name ?? null,
+    roles: session.user.roles ?? ['STUDENT'],
+    emailVerified: (session.user as any).emailVerified ?? false,
+  };
+}
+
+/**
+ * Returns the session user if logged in, or null. Never throws.
+ */
+export async function optionalAuth(): Promise<AuthUser | null> {
+  try {
+    return await requireAuth();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Require one of the given roles. Throws 'Forbidden' if missing.
+ */
+export async function requireRole(allowedRoles: string[]): Promise<AuthUser> {
+  const user = await requireAuth();
+  if (!user.roles.some((r) => allowedRoles.includes(r))) {
+    throw new Error('Forbidden');
+  }
   return user;
 }
 
-export async function requireRoles(request: NextRequest, allowedRoles: UserRole[]) {
-  const user = await requireAuth(request);
+export async function requireAdmin(): Promise<AuthUser> {
+  return requireRole(['ADMIN', 'OWNER']);
+}
 
-  const hasRole = user.roles.some((role) => allowedRoles.includes(role));
+export async function requireOwner(): Promise<AuthUser> {
+  return requireRole(['OWNER']);
+}
 
-  if (!hasRole) {
-    throw new Error('Forbidden: Insufficient permissions');
-  }
+export function isAdmin(user: AuthUser): boolean {
+  return user.roles.some((r) => r === 'ADMIN' || r === 'OWNER');
+}
 
-  return user;
+/**
+ * Map common thrown errors to HTTP status codes.
+ * Usage: status: getErrorStatus(error)
+ */
+export function getErrorStatus(error: any): number {
+  if (error?.message === 'Unauthorized') return 401;
+  if (error?.message === 'Forbidden') return 403;
+  return 500;
 }

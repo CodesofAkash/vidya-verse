@@ -1,54 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAccessToken, isTokenBlacklisted, isUserBlacklisted } from '@/lib/jwt';
+import { auth } from '@/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '');
+    const session = await auth();
 
-    if (!token) {
+    if (!session?.user) {
       return NextResponse.json(
-        {
-          success: false,
-          message: 'No token provided',
-        },
+        { success: false, message: 'Not authenticated' },
         { status: 401 }
-      );
-    }
-
-    // Check if token is blacklisted
-    const blacklisted = await isTokenBlacklisted(token);
-    if (blacklisted) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Token has been invalidated',
-        },
-        { status: 401 }
-      );
-    }
-
-    // Verify token
-    const decoded = verifyAccessToken(token);
-    if (!decoded) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Invalid or expired token',
-        },
-        { status: 401 }
-      );
-    }
-
-    // Check if user is blacklisted (banned)
-    const userBlacklisted = await isUserBlacklisted(decoded.userId);
-    if (userBlacklisted) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'User account has been suspended',
-        },
-        { status: 403 }
       );
     }
 
@@ -56,24 +16,20 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         user: {
-          id: decoded.userId,
-          email: decoded.email,
-          roles: decoded.roles,
-          emailVerified: decoded.emailVerified,
-          semester: decoded.semester,
-          department: decoded.department,
-          college: decoded.college,
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.name,
+          roles: session.user.roles,
+          emailVerified: session.user.emailVerified,
+          semester: session.user.semester,
+          department: session.user.department,
+          college: session.user.college,
         },
       },
     });
-  } catch (error: any) {
-    console.error('Get user error:', error);
-
+  } catch (error) {
     return NextResponse.json(
-      {
-        success: false,
-        message: 'Failed to get user',
-      },
+      { success: false, message: 'Failed to fetch user' },
       { status: 500 }
     );
   }

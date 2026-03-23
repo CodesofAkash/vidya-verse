@@ -1,31 +1,39 @@
 // app/api/uploadthing/core.ts
-// UploadThing router — handles permanent file storage after admin approval
 import { createUploadthing, type FileRouter } from 'uploadthing/next';
 import { auth } from '@/auth';
 
 const f = createUploadthing();
 
+const ALLOWED_FILES = {
+  pdf: { maxFileSize: '64MB' as const, maxFileCount: 1 },
+  image: { maxFileSize: '16MB' as const, maxFileCount: 1 },
+} as const;
+
 export const ourFileRouter = {
-  // Called by admin when they approve a pending upload — moves file to permanent storage
-  resourceUploader: f({
-    pdf: { maxFileSize: '64MB', maxFileCount: 1 },
-    'application/msword': { maxFileSize: '32MB', maxFileCount: 1 },
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { maxFileSize: '32MB', maxFileCount: 1 },
-    'application/vnd.ms-powerpoint': { maxFileSize: '64MB', maxFileCount: 1 },
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation': { maxFileSize: '64MB', maxFileCount: 1 },
-    image: { maxFileSize: '16MB', maxFileCount: 1 },
-  })
+  // Regular users upload here when submitting a resource for review
+  // After upload, client saves metadata to pending_uploads via POST /api/resources
+  pendingUploader: f(ALLOWED_FILES)
+    .middleware(async () => {
+      const session = await auth();
+      if (!session?.user?.id) throw new Error('Unauthorized');
+      const emailVerified = (session.user as any).emailVerified;
+      if (!emailVerified) throw new Error('Please verify your email before uploading');
+      return { userId: session.user.id };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      return { uploadedBy: metadata.userId, url: file.url, key: file.key, size: file.size };
+    }),
+
+  // Admins can upload a replacement file when approving (optional)
+  adminUploader: f(ALLOWED_FILES)
     .middleware(async () => {
       const session = await auth();
       if (!session?.user?.id) throw new Error('Unauthorized');
       const roles: string[] = (session.user as any).roles ?? [];
-      if (!roles.some((r) => r === 'ADMIN' || r === 'OWNER')) {
-        throw new Error('Forbidden — only admins can trigger permanent upload');
-      }
+      if (!roles.some((r) => r === 'ADMIN' || r === 'OWNER')) throw new Error('Forbidden');
       return { adminId: session.user.id };
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      // Return the key and url so the calling route can save to DB
       return { uploadedBy: metadata.adminId, url: file.url, key: file.key };
     }),
 } satisfies FileRouter;

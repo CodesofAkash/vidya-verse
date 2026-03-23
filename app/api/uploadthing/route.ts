@@ -1,7 +1,10 @@
-// app/api/uploadthing/route.ts
-import { createRouteHandler } from 'uploadthing/next';
-import { ourFileRouter } from './core';
+// app/api/upload/route.ts
+// No longer used. Uploads go directly through UploadThing (/api/uploadthing).
+import { NextResponse } from "next/server";
 
-export const { GET, POST } = createRouteHandler({
-  router: ourFileRouter,
-});
+export async function POST() {
+  return NextResponse.json(
+    { success: false, message: "Deprecated. Use /api/uploadthing instead." },
+    { status: 410 }
+  );
+}

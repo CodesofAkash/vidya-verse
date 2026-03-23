@@ -64,45 +64,89 @@ enum RoleRequestStatus {
   REJECTED
 }
 
-// ==================== MODELS ====================
+enum NotificationType {
+  ROLE_REQUEST_APPROVED
+  ROLE_REQUEST_REJECTED
+  ROLE_REQUEST_SUBMITTED   // sent to admins when someone requests a role
+  UPLOAD_APPROVED
+  UPLOAD_REJECTED
+  UPLOAD_UNDER_REVIEW
+  NEW_ANSWER               // sent to question author
+  ANSWER_ACCEPTED          // sent to answer author
+  MENTOR_BOOKING_RECEIVED  // sent to mentor
+  MENTOR_BOOKING_CONFIRMED // sent to mentee
+  MENTOR_BOOKING_CANCELLED
+  SYSTEM
+}
+
+enum VoteType {
+  UP
+  DOWN
+}
+
+enum MentorAvailability {
+  WEEKDAY_MORNINGS
+  WEEKDAY_EVENINGS
+  WEEKENDS
+  FLEXIBLE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+// ==================== CORE MODELS ====================
 
 model User {
-  id               String   @id @default(uuid())
-  email            String   @unique
-  passwordHash     String   @map("password_hash")
-  name             String?
-  bio              String?
-  semester         Int?
-  department       Department?
-  collegeId        String?  @map("collegeId")
-  profilePicture   String?  @map("profile_picture")
-  roles            UserRole[] @default([STUDENT])
-  warningCount     Int      @default(0) @map("warning_count")
-  canUpload        Boolean  @default(true) @map("can_upload")
-  isActive         Boolean  @default(true) @map("is_active")
-  emailVerified    Boolean  @default(false) @map("email_verified")
-  emailVerificationToken String?         @unique
+  id                      String      @id @default(uuid())
+  email                   String      @unique
+  passwordHash            String      @map("password_hash")
+  name                    String?
+  bio                     String?
+  semester                Int?
+  department              Department?
+  collegeId               String?     @map("collegeId")
+  profilePicture          String?     @map("profile_picture")
+  roles                   UserRole[]  @default([STUDENT])
+  warningCount            Int         @default(0) @map("warning_count")
+  canUpload               Boolean     @default(true) @map("can_upload")
+  isActive                Boolean     @default(true) @map("is_active")
+  emailVerified           Boolean     @default(false) @map("email_verified")
+  emailVerificationToken  String?     @unique
   emailVerificationExpiry DateTime?
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  passwordResetToken      String?     @unique @map("password_reset_token")
+  passwordResetExpiry     DateTime?   @map("password_reset_expiry")
+  createdAt               DateTime    @default(now()) @map("created_at")
+  updatedAt               DateTime    @updatedAt @map("updated_at")
 
   // Relations
-  college              College?           @relation(fields: [collegeId], references: [id])
-  pendingUploads       PendingUpload[]    @relation("UploadedBy")
-  assignedUploads      PendingUpload[]    @relation("AssignedAdmin")
-  resources            Resource[]         @relation("ResourceUploader")
-  approvedResources    Resource[]         @relation("ResourceApprover")
-  bookmarks            Bookmark[]
-  ratings              ResourceRating[]
-  downloads            DownloadHistory[]
-  roleRequests         RoleRequest[]      @relation("Requester")
-  reviewedRequests     RoleRequest[]      @relation("Reviewer")
-  warnings             UserWarning[]      @relation("WarnedUser")
-  issuedWarnings       UserWarning[]      @relation("WarningIssuer")
-  moderationLogs       ModerationLog[]
-  chatSessionsAsUser   ChatSession[]      @relation("UserInChat")
-  chatSessionsAsAdmin  ChatSession[]      @relation("AdminInChat")
-  chatMessages         ChatMessage[]
+  college               College?           @relation(fields: [collegeId], references: [id])
+  pendingUploads        PendingUpload[]    @relation("UploadedBy")
+  assignedUploads       PendingUpload[]    @relation("AssignedAdmin")
+  resources             Resource[]         @relation("ResourceUploader")
+  approvedResources     Resource[]         @relation("ResourceApprover")
+  bookmarks             Bookmark[]
+  ratings               ResourceRating[]
+  downloads             DownloadHistory[]
+  roleRequests          RoleRequest[]      @relation("Requester")
+  reviewedRequests      RoleRequest[]      @relation("Reviewer")
+  warnings              UserWarning[]      @relation("WarnedUser")
+  issuedWarnings        UserWarning[]      @relation("WarningIssuer")
+  moderationLogs        ModerationLog[]
+  chatSessionsAsUser    ChatSession[]      @relation("UserInChat")
+  chatSessionsAsAdmin   ChatSession[]      @relation("AdminInChat")
+  chatMessages          ChatMessage[]
+  receivedNotifications Notification[]     @relation("NotificationRecipient")
+  sentNotifications     Notification[]     @relation("NotificationSender")
+  questions             Question[]
+  answers               Answer[]
+  votes                 Vote[]
+  mentorProfile         MentorProfile?
+  bookingsAsMentee      MentorBooking[]    @relation("Mentee")
+  bookingsAsMentor      MentorBooking[]    @relation("MentorUser")
 
   @@map("users")
 }
@@ -116,7 +160,6 @@ model College {
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations
   users User[]
 
   @@map("colleges")
@@ -124,32 +167,32 @@ model College {
 }
 
 model PendingUpload {
-  id              String        @id @default(uuid())
+  id              String       @id @default(uuid())
   title           String
   description     String
   subject         String
   semester        Int
   department      Department
-  resourceType    ResourceType  @map("resource_type")
-  chapterTopic    String?       @map("chapter_topic")
-  blobUrl         String        @map("blob_url")
-  fileSize        Int           @map("file_size")
-  fileHash        String        @map("file_hash")
-  uploadedById    String        @map("uploaded_by_id")
-  assignedAdminId String?       @map("assigned_admin_id")
-  status          UploadStatus  @default(PENDING)
-  canEdit         Boolean       @default(true) @map("can_edit")
-  rejectionReason String?       @map("rejection_reason")
-  chatSessionId   String?       @unique @map("chat_session_id")
-  appealCount     Int           @default(0) @map("appeal_count")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
-  lastActivityAt  DateTime      @default(now()) @map("last_activity_at")
+  resourceType    ResourceType @map("resource_type")
+  chapterTopic    String?      @map("chapter_topic")
+  blobUrl         String       @map("blob_url")         // Vercel Blob URL (temporary, pre-approval)
+  uploadthingKey  String?      @map("uploadthing_key")  // set after admin approves & moves to UploadThing
+  fileSize        Int          @map("file_size")
+  fileHash        String       @map("file_hash")
+  uploadedById    String       @map("uploaded_by_id")
+  assignedAdminId String?      @map("assigned_admin_id")
+  status          UploadStatus @default(PENDING)
+  canEdit         Boolean      @default(true) @map("can_edit")
+  rejectionReason String?      @map("rejection_reason")
+  chatSessionId   String?      @unique @map("chat_session_id")
+  appealCount     Int          @default(0) @map("appeal_count")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  lastActivityAt  DateTime     @default(now()) @map("last_activity_at")
 
-  // Relations
-  uploadedBy     User          @relation("UploadedBy", fields: [uploadedById], references: [id])
-  assignedAdmin  User?         @relation("AssignedAdmin", fields: [assignedAdminId], references: [id])
-  chatSession    ChatSession?  @relation("PendingUploadChat")
+  uploadedBy     User           @relation("UploadedBy", fields: [uploadedById], references: [id])
+  assignedAdmin  User?          @relation("AssignedAdmin", fields: [assignedAdminId], references: [id])
+  chatSession    ChatSession?   @relation("PendingUploadChat")
   moderationLogs ModerationLog[]
 
   @@index([uploadedById])
@@ -160,44 +203,44 @@ model PendingUpload {
 }
 
 model Resource {
-  id            String       @id @default(uuid())
-  title         String
-  description   String
-  subject       String
-  semester      Int
-  department    Department
-  resourceType  ResourceType @map("resource_type")
-  chapterTopic  String?      @map("chapter_topic")
-  fileUrl       String       @map("file_url")
-  fileSize      Int          @map("file_size")
-  fileHash      String       @map("file_hash")
-  thumbnailUrl  String?      @map("thumbnail_url")
-  uploadedById  String       @map("uploaded_by_id")
-  approvedById  String       @map("approved_by_id")
-  approvedAt    DateTime     @map("approved_at")
-  downloadCount Int          @default(0) @map("download_count")
-  viewCount     Int          @default(0) @map("view_count")
-  averageRating Float?       @map("average_rating")
-  totalRatings  Int          @default(0) @map("total_ratings")
-  isPremium     Boolean      @default(false) @map("is_premium")
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
+  id             String       @id @default(uuid())
+  title          String
+  description    String
+  subject        String
+  semester       Int
+  department     Department
+  resourceType   ResourceType @map("resource_type")
+  chapterTopic   String?      @map("chapter_topic")
+  fileUrl        String       @map("file_url")           // UploadThing permanent CDN URL
+  uploadthingKey String?      @map("uploadthing_key")    // for deletion via UploadThing API
+  fileSize       Int          @map("file_size")
+  fileHash       String       @map("file_hash")
+  thumbnailUrl   String?      @map("thumbnail_url")
+  uploadedById   String       @map("uploaded_by_id")
+  approvedById   String       @map("approved_by_id")
+  approvedAt     DateTime     @map("approved_at")
+  downloadCount  Int          @default(0) @map("download_count")
+  viewCount      Int          @default(0) @map("view_count")
+  averageRating  Float?       @map("average_rating")
+  totalRatings   Int          @default(0) @map("total_ratings")
+  isPremium      Boolean      @default(false) @map("is_premium")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  // Relations
-  uploadedBy       User              @relation("ResourceUploader", fields: [uploadedById], references: [id])
-  approvedBy       User              @relation("ResourceApprover", fields: [approvedById], references: [id])
-  bookmarks        Bookmark[]
-  ratings          ResourceRating[]
-  downloads        DownloadHistory[]
-  moderationLogs   ModerationLog[]
+  uploadedBy     User             @relation("ResourceUploader", fields: [uploadedById], references: [id])
+  approvedBy     User             @relation("ResourceApprover", fields: [approvedById], references: [id])
+  bookmarks      Bookmark[]
+  ratings        ResourceRating[]
+  downloads      DownloadHistory[]
+  moderationLogs ModerationLog[]
 
   @@index([uploadedById])
   @@index([semester])
   @@index([department])
   @@index([resourceType])
   @@index([fileHash])
-  @@map("resources")
   @@index([semester, department, resourceType])
+  @@map("resources")
 }
 
 model ModerationLog {
@@ -210,7 +253,6 @@ model ModerationLog {
   decidedAt        DateTime           @default(now()) @map("decided_at")
   metadataSnapshot Json               @map("metadata_snapshot")
 
-  // Relations
   pendingUpload PendingUpload @relation(fields: [originalUploadId], references: [id])
   resource      Resource?     @relation(fields: [resourceId], references: [id])
   decidedBy     User          @relation(fields: [decidedById], references: [id])
@@ -229,10 +271,9 @@ model ChatSession {
   createdAt       DateTime          @default(now()) @map("created_at")
   closedAt        DateTime?         @map("closed_at")
 
-  // Relations
-  pendingUpload PendingUpload  @relation("PendingUploadChat", fields: [pendingUploadId], references: [id])
-  user          User           @relation("UserInChat", fields: [userId], references: [id])
-  admin         User           @relation("AdminInChat", fields: [adminId], references: [id])
+  pendingUpload PendingUpload @relation("PendingUploadChat", fields: [pendingUploadId], references: [id])
+  user          User          @relation("UserInChat", fields: [userId], references: [id])
+  admin         User          @relation("AdminInChat", fields: [adminId], references: [id])
   messages      ChatMessage[]
 
   @@index([userId])
@@ -249,7 +290,6 @@ model ChatMessage {
   timestamp     DateTime   @default(now())
   isRead        Boolean    @default(false) @map("is_read")
 
-  // Relations
   chatSession ChatSession @relation(fields: [chatSessionId], references: [id])
   sender      User        @relation(fields: [senderId], references: [id])
 
@@ -264,7 +304,6 @@ model Bookmark {
   resourceId String   @map("resource_id")
   createdAt  DateTime @default(now()) @map("created_at")
 
-  // Relations
   user     User     @relation(fields: [userId], references: [id])
   resource Resource @relation(fields: [resourceId], references: [id])
 
@@ -282,7 +321,6 @@ model ResourceRating {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  // Relations
   resource Resource @relation(fields: [resourceId], references: [id])
   user     User     @relation(fields: [userId], references: [id])
 
@@ -297,26 +335,26 @@ model DownloadHistory {
   resourceId   String   @map("resource_id")
   downloadedAt DateTime @default(now()) @map("downloaded_at")
 
-  // Relations
   user     User     @relation(fields: [userId], references: [id])
   resource Resource @relation(fields: [resourceId], references: [id])
 
   @@index([userId])
   @@index([resourceId])
+  @@index([downloadedAt])
   @@map("download_history")
 }
 
 model RoleRequest {
-  id               String            @id @default(uuid())
-  userId           String            @map("user_id")
-  requestedRole    UserRole          @map("requested_role")
-  status           RoleRequestStatus @default(PENDING)
-  requestedAt      DateTime          @default(now()) @map("requested_at")
-  reviewedById     String?           @map("reviewed_by_id")
-  reviewedAt       DateTime?         @map("reviewed_at")
-  rejectionReason  String?           @map("rejection_reason")
+  id              String            @id @default(uuid())
+  userId          String            @map("user_id")
+  requestedRole   UserRole          @map("requested_role")
+  reason          String            // why they want this role
+  status          RoleRequestStatus @default(PENDING)
+  requestedAt     DateTime          @default(now()) @map("requested_at")
+  reviewedById    String?           @map("reviewed_by_id")
+  reviewedAt      DateTime?         @map("reviewed_at")
+  rejectionReason String?           @map("rejection_reason")
 
-  // Relations
   user       User  @relation("Requester", fields: [userId], references: [id])
   reviewedBy User? @relation("Reviewer", fields: [reviewedById], references: [id])
 
@@ -326,16 +364,152 @@ model RoleRequest {
 }
 
 model UserWarning {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  warnedById String  @map("warned_by_id")
-  reason    String
-  warnedAt  DateTime @default(now()) @map("warned_at")
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  warnedById String   @map("warned_by_id")
+  reason     String
+  warnedAt   DateTime @default(now()) @map("warned_at")
 
-  // Relations
   user     User @relation("WarnedUser", fields: [userId], references: [id])
   warnedBy User @relation("WarningIssuer", fields: [warnedById], references: [id])
 
   @@index([userId])
   @@map("user_warnings")
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id          String           @id @default(uuid())
+  recipientId String           @map("recipient_id")
+  senderId    String?          @map("sender_id")    // null = system
+  type        NotificationType
+  title       String
+  body        String
+  linkUrl     String?          @map("link_url")     // deep link (e.g. /vidya-sang/questions/123)
+  isRead      Boolean          @default(false) @map("is_read")
+  metadata    Json?                                 // e.g. { roleRequestId, uploadId }
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  recipient User  @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender    User? @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, isRead])
+  @@index([recipientId, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ==================== VIDYA SANG (Q&A) ====================
+
+model Question {
+  id          String      @id @default(uuid())
+  authorId    String      @map("author_id")
+  title       String
+  body        String      @db.Text
+  subject     String
+  semester    Int?
+  department  Department?
+  tags        String[]    @default([])
+  viewCount   Int         @default(0) @map("view_count")
+  answerCount Int         @default(0) @map("answer_count")  // denormalised for perf
+  isResolved  Boolean     @default(false) @map("is_resolved")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  author  User     @relation(fields: [authorId], references: [id])
+  answers Answer[]
+
+  @@index([authorId])
+  @@index([subject])
+  @@index([department])
+  @@index([createdAt(sort: Desc)])
+  @@map("questions")
+}
+
+model Answer {
+  id         String   @id @default(uuid())
+  questionId String   @map("question_id")
+  authorId   String   @map("author_id")
+  body       String   @db.Text
+  isAccepted Boolean  @default(false) @map("is_accepted")
+  upvotes    Int      @default(0)
+  downvotes  Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id])
+  votes    Vote[]
+
+  @@index([questionId])
+  @@index([authorId])
+  @@map("answers")
+}
+
+model Vote {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  answerId  String   @map("answer_id")
+  type      VoteType
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id])
+  answer Answer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, answerId])
+  @@index([answerId])
+  @@map("votes")
+}
+
+// ==================== VIDYA SETU (MENTORSHIP) ====================
+
+model MentorProfile {
+  id            String               @id @default(uuid())
+  userId        String               @unique @map("user_id")
+  headline      String               // e.g. "3rd Year CSE | DSA Expert"
+  bio           String               @db.Text
+  expertise     String[]             // e.g. ["DSA","Web Dev","ML"]
+  department    Department
+  semester      Int?
+  availability  MentorAvailability[]
+  hourlyRate    Float?               @map("hourly_rate") // null = free
+  isActive      Boolean              @default(true) @map("is_active")
+  totalSessions Int                  @default(0) @map("total_sessions")
+  averageRating Float?               @map("average_rating")
+  totalRatings  Int                  @default(0) @map("total_ratings")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  user     User            @relation(fields: [userId], references: [id])
+  bookings MentorBooking[]
+
+  @@index([department])
+  @@index([isActive])
+  @@map("mentor_profiles")
+}
+
+model MentorBooking {
+  id              String        @id @default(uuid())
+  mentorProfileId String        @map("mentor_profile_id")
+  menteeId        String        @map("mentee_id")
+  mentorUserId    String        @map("mentor_user_id")
+  subject         String
+  message         String        @db.Text
+  scheduledAt     DateTime?     @map("scheduled_at")
+  durationMins    Int           @default(60) @map("duration_mins")
+  status          BookingStatus @default(PENDING)
+  meetingLink     String?       @map("meeting_link")
+  menteeRating    Int?          @map("mentee_rating")
+  menteeReview    String?       @map("mentee_review") @db.Text
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  mentorProfile MentorProfile @relation(fields: [mentorProfileId], references: [id])
+  mentee        User          @relation("Mentee", fields: [menteeId], references: [id])
+  mentorUser    User          @relation("MentorUser", fields: [mentorUserId], references: [id])
+
+  @@index([mentorProfileId])
+  @@index([menteeId])
+  @@index([status])
+  @@map("mentor_bookings")
 }

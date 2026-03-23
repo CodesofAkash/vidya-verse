@@ -1,10 +1,12 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
 
 async function main() {
   console.log('🌱 Starting database seeding...');
 
-  // Clear existing data (optional - comment out if you want to keep data)
+  // Clear existing data
   console.log('🧹 Cleaning existing data...');
   await prisma.userWarning.deleteMany();
   await prisma.roleRequest.deleteMany();
@@ -51,7 +53,7 @@ async function main() {
       collegeId: college1.id,
       emailVerified: true,
       semester: 8,
-      department: 'COMPUTER',
+      department: 'COMPUTER', // Use Department.COMPUTER if using enums
     },
   });
 
